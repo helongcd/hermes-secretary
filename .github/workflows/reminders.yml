@@ -1,0 +1,51 @@
+name: 云马秘书提醒
+
+on:
+  schedule:
+    - cron: '30 23 * * 0-4'
+    - cron: '0 0 * * 1-5'
+    - cron: '0 8 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      task_type:
+        description: 任务类型
+        required: false
+        default: morning_brief
+        type: choice
+        options:
+          - morning_brief
+          - hou_morning
+          - hou_afternoon
+          - monday_meeting
+          - thursday_meeting
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Determine task type
+        id: task
+        run: |
+          HOUR=$(TZ='Asia/Shanghai' date +%H)
+          MINUTE=$(TZ='Asia/Shanghai' date +%M)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ inputs.task_type }}" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "07" ] && [ "$MINUTE" -ge "25" ] && [ "$MINUTE" -le "35" ]; then
+            echo "type=morning_brief" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "08" ]; then
+            echo "type=hou_morning" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "16" ]; then
+            echo "type=hou_afternoon" >> $GITHUB_OUTPUT
+          else
+            echo "type=morning_brief" >> $GITHUB_OUTPUT
+          fi
+      - name: Send reminder
+        run: python scripts/send_reminder.py
+        env:
+          SENDKEY: ${{ secrets.SENDKEY }}
+          TASK_TYPE: ${{ steps.task.outputs.type }}
